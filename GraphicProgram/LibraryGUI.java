@@ -1,149 +1,181 @@
 import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.IOException;
-import java.util.List;
 
 public class LibraryGUI extends JFrame {
-    private LibraryManager library;
-    private JTextArea displayArea;
+    private LibraryManager manager;
+    private JTable bookTable;
+    private JTable memberTable;
+    private DefaultTableModel bookTableModel;
+    private DefaultTableModel memberTableModel;
 
     public LibraryGUI() {
         try {
-            library = new LibraryManager();
+            manager = new LibraryManager();
         } catch (IOException e) {
             showError("Failed to load data: " + e.getMessage());
             return;
         }
 
-        setTitle("📚 Library Management System");
-        setSize(600, 500);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setTitle("Library Management System");
+        setSize(900, 600);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
-        JPanel buttonPanel = new JPanel(new GridLayout(2, 4, 10, 10));
-        JButton addBookBtn = new JButton("Add Book");
-        JButton addMemberBtn = new JButton("Add Member");
-        JButton viewBooksBtn = new JButton("View All Books");
-        JButton viewMembersBtn = new JButton("View All Members");
-        JButton borrowBookBtn = new JButton("Borrow Book");
-        JButton returnBookBtn = new JButton("Return Book");
-        JButton clearBtn = new JButton("Clear Display");
-        JButton exitBtn = new JButton("Exit");
+        JTabbedPane tabbedPane = new JTabbedPane();
 
-        displayArea = new JTextArea();
-        displayArea.setEditable(false);
-        displayArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
-        JScrollPane scrollPane = new JScrollPane(displayArea);
+        tabbedPane.addTab("Books", createBooksPanel());
+        tabbedPane.addTab("Members", createMembersPanel());
+        tabbedPane.addTab("Borrow / Return", createBorrowReturnPanel());
 
-        addBookBtn.addActionListener(e -> addBook());
-        addMemberBtn.addActionListener(e -> addMember());
-        viewBooksBtn.addActionListener(e -> viewBooks());
-        viewMembersBtn.addActionListener(e -> viewMembers());
-        borrowBookBtn.addActionListener(e -> borrowBook());
-        returnBookBtn.addActionListener(e -> returnBook());
-        clearBtn.addActionListener(e -> displayArea.setText(""));
-        exitBtn.addActionListener(e -> System.exit(0));
-
-        buttonPanel.add(addBookBtn);
-        buttonPanel.add(addMemberBtn);
-        buttonPanel.add(viewBooksBtn);
-        buttonPanel.add(viewMembersBtn);
-        buttonPanel.add(borrowBookBtn);
-        buttonPanel.add(returnBookBtn);
-        buttonPanel.add(clearBtn);
-        buttonPanel.add(exitBtn);
-
-        add(buttonPanel, BorderLayout.NORTH);
-        add(scrollPane, BorderLayout.CENTER);
+        add(tabbedPane);
 
         setVisible(true);
     }
 
-    private void addBook() {
-        String title = JOptionPane.showInputDialog(this, "Enter book title:");
-        if (title != null && !title.isBlank()) {
-            try {
-                library.addBook(title);
-                appendDisplay("✅ Book added: " + title);
-            } catch (IOException e) {
-                showError("Error saving book: " + e.getMessage());
+    private JPanel createBooksPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+
+        bookTableModel = new DefaultTableModel(new Object[]{"ID", "Title", "Status"}, 0);
+        bookTable = new JTable(bookTableModel);
+        refreshBookTable();
+
+        panel.add(new JScrollPane(bookTable), BorderLayout.CENTER);
+
+        JPanel form = new JPanel();
+        JTextField titleField = new JTextField(20);
+        JButton addButton = new JButton("Add Book");
+
+        form.add(new JLabel("Title:"));
+        form.add(titleField);
+        form.add(addButton);
+
+        addButton.addActionListener(e -> {
+            String title = titleField.getText().trim();
+            if (!title.isEmpty()) {
+                try {
+                    manager.addBook(title);
+                    refreshBookTable();
+                    titleField.setText("");
+                } catch (IOException ex) {
+                    showError("Failed to add book.");
+                }
             }
-        }
+        });
+
+        panel.add(form, BorderLayout.SOUTH);
+        return panel;
     }
 
-    private void addMember() {
-        String name = JOptionPane.showInputDialog(this, "Enter member name:");
-        if (name != null && !name.isBlank()) {
-            try {
-                library.addMember(name);
-                appendDisplay("✅ Member added: " + name);
-            } catch (IOException e) {
-                showError("Error saving member: " + e.getMessage());
+    private JPanel createMembersPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+
+        memberTableModel = new DefaultTableModel(new Object[]{"ID", "Name", "Borrowed Books"}, 0);
+        memberTable = new JTable(memberTableModel);
+        refreshMemberTable();
+
+        panel.add(new JScrollPane(memberTable), BorderLayout.CENTER);
+
+        JPanel form = new JPanel();
+        JTextField nameField = new JTextField(20);
+        JButton addButton = new JButton("Add Member");
+
+        form.add(new JLabel("Name:"));
+        form.add(nameField);
+        form.add(addButton);
+
+        addButton.addActionListener(e -> {
+            String name = nameField.getText().trim();
+            if (!name.isEmpty()) {
+                try {
+                    manager.addMember(name);
+                    refreshMemberTable();
+                    nameField.setText("");
+                } catch (IOException ex) {
+                    showError("Failed to add member.");
+                }
             }
-        }
+        });
+
+        panel.add(form, BorderLayout.SOUTH);
+        return panel;
     }
 
-    private void viewBooks() {
-        List<Book> books = library.getBooks();
-        StringBuilder sb = new StringBuilder("\n📚 All Books:\n");
-        for (Book b : books) {
-            sb.append(b.getBookId())
-              .append(" - ")
-              .append(b.getTitle())
-              .append(" [")
-              .append(b.isAvailable() ? "Available" : "Borrowed")
-              .append("]\n");
-        }
-        displayArea.setText(sb.toString());
-    }
+    private JPanel createBorrowReturnPanel() {
+        JPanel panel = new JPanel(new GridLayout(2, 1));
 
-    private void viewMembers() {
-        List<Member> members = library.getMembers();
-        StringBuilder sb = new StringBuilder("\n👥 All Members:\n");
-        for (Member m : members) {
-            sb.append(m.getMemberId())
-              .append(" - ")
-              .append(m.getName())
-              .append(" | Borrowed Books: ")
-              .append(m.getBorrowedBooks())
-              .append("\n");
-        }
-        displayArea.setText(sb.toString());
-    }
+        JPanel borrowPanel = new JPanel();
+        JTextField bookIdBorrow = new JTextField(5);
+        JTextField memberIdBorrow = new JTextField(5);
+        JButton borrowButton = new JButton("Borrow");
 
-    private void borrowBook() {
-        String bookId = JOptionPane.showInputDialog(this, "Enter book ID to borrow:");
-        String memberId = JOptionPane.showInputDialog(this, "Enter member ID:");
-        if (bookId != null && memberId != null && !bookId.isBlank() && !memberId.isBlank()) {
+        borrowPanel.add(new JLabel("Book ID:"));
+        borrowPanel.add(bookIdBorrow);
+        borrowPanel.add(new JLabel("Member ID:"));
+        borrowPanel.add(memberIdBorrow);
+        borrowPanel.add(borrowButton);
+
+        borrowButton.addActionListener(e -> {
             try {
-                library.borrowBook(bookId, memberId);
-                appendDisplay("✅ Book borrowed successfully.");
-            } catch (IOException e) {
-                showError("Error borrowing book: " + e.getMessage());
+                manager.borrowBook(bookIdBorrow.getText().trim(), memberIdBorrow.getText().trim());
+                refreshBookTable();
+                refreshMemberTable();
+            } catch (IOException ex) {
+                showError("Failed to borrow book.");
             }
+        });
+
+        JPanel returnPanel = new JPanel();
+        JTextField bookIdReturn = new JTextField(5);
+        JButton returnButton = new JButton("Return");
+
+        returnPanel.add(new JLabel("Book ID:"));
+        returnPanel.add(bookIdReturn);
+        returnPanel.add(returnButton);
+
+        returnButton.addActionListener(e -> {
+            try {
+                manager.returnBook(bookIdReturn.getText().trim());
+                refreshBookTable();
+                refreshMemberTable();
+            } catch (IOException ex) {
+                showError("Failed to return book.");
+            }
+        });
+
+        panel.add(borrowPanel);
+        panel.add(returnPanel);
+        return panel;
+    }
+
+    private void refreshBookTable() {
+        bookTableModel.setRowCount(0);
+        for (Book book : manager.getBooks()) {
+            bookTableModel.addRow(new Object[]{
+                book.getBookId(),
+                book.getTitle(),
+                book.isAvailable() ? "Available" : "Borrowed"
+            });
         }
     }
 
-    private void returnBook() {
-        String bookId = JOptionPane.showInputDialog(this, "Enter book ID to return:");
-        if (bookId != null && !bookId.isBlank()) {
-            try {
-                library.returnBook(bookId);
-                appendDisplay("✅ Book returned successfully.");
-            } catch (IOException e) {
-                showError("Error returning book: " + e.getMessage());
-            }
+    private void refreshMemberTable() {
+        memberTableModel.setRowCount(0);
+        for (Member member : manager.getMembers()) {
+            memberTableModel.addRow(new Object[]{
+                member.getMemberId(),
+                member.getName(),
+                String.join(", ", member.getBorrowedBooks())
+            });
         }
     }
 
     private void showError(String message) {
         JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
-    }
-
-    private void appendDisplay(String text) {
-        displayArea.append(text + "\n");
     }
 
     public static void main(String[] args) {
